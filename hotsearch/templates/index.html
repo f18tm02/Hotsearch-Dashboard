@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>舆情实时监控平台V1.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body {
+            background: radial-gradient(ellipse at center, #142850 0%, #0a1833 100%);
+            color: #eaf6fb;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            min-width: 1200px;
+            min-height: 768px;
+        }
+        .dashboard-header {
+            height: 8vh;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(10,24,51,0.95);
+            border-bottom: 2px solid #00cfff;
+            box-shadow: 0 2px 16px #00cfff44;
+            padding: 0 2vw;
+        }
+        .dashboard-title {
+            font-size: clamp(20px, 2vw, 26px);
+            font-weight: bold;
+            color: #00cfff;
+            letter-spacing: 2px;
+            text-align: center;
+            flex: 1;
+        }
+        .dashboard-time {
+            font-size: clamp(14px, 1.2vw, 16px);
+            color: #eaf6fb;
+        }
+        .dashboard-main {
+            display: grid;
+            grid-template-columns: 1.2fr 2.6fr 1.2fr;
+            gap: 1.5vh;
+            height: 92vh;
+            padding: 1.5vh;
+            box-sizing: border-box;
+        }
+        .dashboard-left, .dashboard-center, .dashboard-right {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-width: 0;
+        }
+        .panel {
+            background: rgba(20,40,80,0.85);
+            border-radius: 6px;
+            box-shadow: 0 0 16px #00cfff, 0 0 2px #0ff inset;
+            margin-bottom: 1vh;
+            padding: 1vh 0.8vw;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .panel-title {
+            font-size: clamp(16px, 1.5vw, 18px);
+            font-weight: bold;
+            color: #00cfff;
+            border-left: 4px solid #00cfff;
+            padding-left: 8px;
+            margin-bottom: 8px;
+            text-align: center;
+            border-left: none;
+            position: relative;
+        }
+        .panel-title::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 4px;
+            background: #00cfff;
+        }
+        #multiDimensionChart, #categoryChart, #trendChart, #hotSearchChart {
+            width: 100%;
+            height: 100%;
+            min-height: 120px;
+        }
+        .map-panel {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        #chinaMapChart {
+            width: 100%;
+            flex: 1 1 0;
+            min-height: 320px;
+        }
+        .cards-container {
+            max-height: 100%;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .card {
+            background: rgba(10,24,51,0.7);
+            border-radius: 4px;
+            margin-bottom: 6px;
+            padding: 6px 10px;
+            font-size: clamp(12px, 1vw, 14px);
+            color: #eaf6fb;
+            box-shadow: 0 0 6px #00cfff44;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        .card:hover { background: #003366; }
+        .card-keyword {
+            font-size: clamp(13px, 1.1vw, 15px);
+            font-weight: bold;
+            color: #00cfff;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .card-hot {
+            font-size: clamp(11px, 0.9vw, 13px);
+            color: #eaf6fb;
+            margin-left: 10px;
+        }
+        .card-rank {
+            font-size: clamp(11px, 0.9vw, 13px);
+            color: #00cfff;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #00cfff88; border-radius: 3px; }
+        .panel:last-child { margin-bottom: 0; }
+        /* 轮播摘要样式 */
+        .summary-carousel {
+            background: rgba(10,24,51,0.7);
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            position: relative;
+            min-height: 70px;
+            overflow: hidden;
+        }
+        .summary-item {
+            position: absolute;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(30px) scale(0.98);
+            transition: opacity 0.6s cubic-bezier(.4,0,.2,1), transform 0.6s cubic-bezier(.4,0,.2,1);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .summary-item.active {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+            z-index: 1;
+        }
+        .summary-item.out {
+            opacity: 0;
+            transform: translateY(-30px) scale(0.98);
+            z-index: 0;
+        }
+        .summary-keyword {
+            color: #00cfff;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .summary-content {
+            color: #eaf6fb;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .summary-hot {
+            color: #7c5fff;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        /* 媒体查询 */
+        @media screen and (max-width: 1600px) {
+            .dashboard-main {
+                grid-template-columns: 1fr 2fr 1fr;
+            }
+        }
+        @media screen and (max-width: 1366px) {
+            .dashboard-main {
+                grid-template-columns: 1fr 1.8fr 1fr;
+            }
+        }
+        @media screen and (max-height: 900px) {
+            .panel {
+                margin-bottom: 0.8vh;
+                padding: 0.8vh 0.6vw;
+            }
+        }
+        .dashboard-right {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-width: 0;
+        }
+        .hot-chart-panel {
+            flex: 2 1 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .cards-panel {
+            flex: 1 1 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #hotSearchChart {
+            flex: 1 1 0;
+            width: 100%;
+            height: 100% !important;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="dashboard-title">舆情实时监控平台V1.0</div>
+        <div class="dashboard-time" id="currentTime"></div>
+    </div>
+    <div class="dashboard-main">
+        <!-- 左侧栏 -->
+        <div class="dashboard-left">
+            <div class="panel">
+                <div class="panel-title">多维度对比</div>
+                <div id="multiDimensionChart"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-title">话题分类占比</div>
+                <div id="categoryChart"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-title">分类趋势</div>
+                <div id="trendChart"></div>
+            </div>
+        </div>
+        <!-- 中间栏 -->
+        <div class="dashboard-center">
+            <div class="panel map-panel">
+                <div class="panel-title">地域分布热度图</div>
+                <div id="chinaMapChart"></div>
+                <div class="summary-carousel" id="summaryCarousel"></div>
+            </div>
+        </div>
+        <!-- 右侧栏 -->
+        <div class="dashboard-right">
+            <div class="panel hot-chart-panel">
+                <div class="panel-title">热度排行榜</div>
+                <div id="hotSearchChart"></div>
+            </div>
+            <div class="panel cards-panel">
+                <div class="panel-title">实时热搜榜单</div>
+                <div class="cards-container" id="cardsContainer"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+    // 顶部时间动态刷新
+    function updateTime() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth()+1).padStart(2,'0');
+        const d = String(now.getDate()).padStart(2,'0');
+        const h = String(now.getHours()).padStart(2,'0');
+        const min = String(now.getMinutes()).padStart(2,'0');
+        const s = String(now.getSeconds()).padStart(2,'0');
+        document.getElementById('currentTime').textContent = `${y}-${m}-${d} ${h}:${min}:${s}`;
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+    </script>
+    <script>
+    // 多维度条形图
+    const multiChart = echarts.init(document.getElementById('multiDimensionChart'), 'dark');
+    function updateMultiChart() {
+        fetch('/api/multi-dimension')
+            .then(res => res.json())
+            .then(data => {
+                const chartData = data.data;
+                // 用编号代替x轴文字
+                const xLabels = chartData.map((d, i) => `#${i+1}`);
+                const tooltipMap = chartData.map(d => d.keyword);
+                multiChart.setOption({
+                    title: { show: false },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'shadow' },
+                        formatter: function(params) {
+                            // params[0].dataIndex
+                            let idx = params[0].dataIndex;
+                            let tip = `<b>${tooltipMap[idx]}</b><br/>`;
+                            params.forEach(p => {
+                                tip += `${p.marker}${p.seriesName}: ${p.value}<br/>`;
+                            });
+                            return tip;
+                        }
+                    },
+                    legend: { data: ['讨论量', '互动量', '原创量'], textStyle: { color: '#eaf6fb' }, top: 0 },
+                    grid: { left: 30, right: 10, top: 30, bottom: 20, containLabel: true },
+                    xAxis: { type: 'category', data: xLabels, axisLabel: { color: '#eaf6fb', rotate: 0 } },
+                    yAxis: { type: 'value', name: '', axisLabel: { color: '#eaf6fb' }, splitLine: { lineStyle: { color: '#233a5e' } } },
+                    series: [
+                        { name: '讨论量', type: 'bar', data: chartData.map(d => d.discuss), itemStyle: { color: '#00cfff' } },
+                        { name: '互动量', type: 'bar', data: chartData.map(d => d.interact), itemStyle: { color: '#3a8ee6' } },
+                        { name: '原创量', type: 'bar', data: chartData.map(d => d.origin), itemStyle: { color: '#7c5fff' } }
+                    ]
+                });
+            });
+    }
+    updateMultiChart();
+    setInterval(updateMultiChart, 60000);
+    </script>
+    <script>
+    // 分类环形图
+    function initCategoryChart() {
+        fetch('/api/topic-categories')
+            .then(response => response.json())
+            .then(data => {
+                const chart = echarts.init(document.getElementById('categoryChart'), 'dark');
+                // 只显示前8个分类
+                let cats = data.categories.slice(0,8);
+                chart.setOption({
+                    title: { show: false },
+                    tooltip: { trigger: 'item' },
+                    legend: { orient: 'vertical', left: 'left', textStyle: { color: '#eaf6fb' }, data: cats.map(c=>c.name) },
+                    series: [{
+                        name: '分类占比',
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        label: { formatter: '{b}: {d}%' },
+                        data: cats
+                    }]
+                });
+            });
+    }
+    initCategoryChart();
+    setInterval(initCategoryChart, 60000);
+    </script>
+    <script>
+    // 分类趋势折线图
+    function initTrendChart() {
+        const chart = echarts.init(document.getElementById('trendChart'), 'dark');
+        fetch('/api/category-trend')
+            .then(res => res.json())
+            .then(data => {
+                chart.setOption({
+                    title: { show: false },
+                    tooltip: { trigger: 'axis', formatter: function (params) { return params.map(p => `${p.seriesName}: ${p.value[1]}%`).join('<br>'); } },
+                    legend: { data: Object.keys(data), textStyle: { color: '#eaf6fb' }, top: 0 },
+                    xAxis: { type: 'category', data: [...new Set(Object.values(data).flatMap(d => d.map(i => i.time)))], axisLabel: { color: '#eaf6fb' } },
+                    yAxis: { type: 'value', name: '占比', axisLabel: { formatter: '{value}%', color: '#eaf6fb' } },
+                    grid: { left: 30, right: 10, top: 30, bottom: 20, containLabel: true },
+                    series: Object.entries(data).map(([category, values]) => ({
+                        name: category,
+                        type: 'line',
+                        smooth: true,
+                        data: values.map(item => [item.time, (item.value / values.reduce((sum, v) => sum + v.value, 0)) * 100]),
+                        lineStyle: { width: 2 }
+                    }))
+                });
+            });
+    }
+    initTrendChart();
+    setInterval(initTrendChart, 60000);
+    </script>
+    <script>
+    // 地图气泡分布
+    function initChinaMap() {
+        const chart = echarts.init(document.getElementById('chinaMapChart'), 'dark');
+        fetch('/api/geo-distribution')
+            .then(res => res.json())
+            .then(data => {
+                echarts.registerMap('china', {geoJSON: data.geoJSON});
+                chart.setOption({
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: function(params) {
+                            // 只显示城市名和热搜数
+                            if (params.data && params.data.value && params.data.value.length === 3) {
+                                return `${params.data.name}<br/>热搜数：${params.data.value[2]}`;
+                            }
+                            return '';
+                        }
+                    },
+                    geo: {
+                        map: 'china',
+                        roam: true,
+                        label: { show: false },
+                        itemStyle: {
+                            areaColor: '#233a5e',
+                            borderColor: '#00cfff'
+                        },
+                        emphasis: {
+                            itemStyle: { areaColor: '#00cfff' }
+                        }
+                    },
+                    series: [{
+                        name: '热搜来源',
+                        type: 'effectScatter',
+                        coordinateSystem: 'geo',
+                        data: data.values.map(item => ({
+                            name: item.name,
+                            value: [item.lng, item.lat, item.value]
+                        })),
+                        symbolSize: function(val) {
+                            // 气泡大小归一化，最小10，最大50
+                            const max = data.maxValue || 1;
+                            return Math.max(10, Math.min(50, val[2] / max * 50));
+                        },
+                        showEffectOn: 'render',
+                        rippleEffect: { brushType: 'stroke' },
+                        hoverAnimation: true,
+                        itemStyle: {
+                            color: '#00cfff',
+                            shadowBlur: 10,
+                            shadowColor: '#333'
+                        },
+                        emphasis: {
+                            scale: true
+                        }
+                    }]
+                });
+            });
+    }
+    initChinaMap();
+    setInterval(initChinaMap, 60000);
+    </script>
+    <script>
+    // 热度排行榜条形图
+    const hotChart = echarts.init(document.getElementById('hotSearchChart'), 'dark');
+    function updateHotChart() {
+        fetch('/api/hot-searches/chart')
+            .then(response => response.json())
+            .then(data => {
+                hotChart.setOption({
+                    title: { show: false },
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: 30, right: 30, top: 20, bottom: 20, containLabel: true },
+                    xAxis: {
+                        type: 'value',
+                        name: '热度值',
+                        nameTextStyle: { color: '#eaf6fb' },
+                        axisLabel: { color: '#eaf6fb', formatter: function(value) { return (value / 10000).toFixed(1) + '万'; } },
+                        splitLine: { lineStyle: { color: '#233a5e' } }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: data.keywords,
+                        axisLabel: { interval: 0, rotate: 0, color: '#eaf6fb', fontSize: 15 },
+                        axisLine: { lineStyle: { color: '#233a5e' } }
+                    },
+                    series: [{
+                        name: '热度',
+                        type: 'bar',
+                        data: data.hot_values,
+                        itemStyle: {
+                            color: function(params) {
+                                const value = params.value;
+                                if (value > 1000000) return '#00cfff';
+                                if (value > 500000) return '#3a8ee6';
+                                if (value > 100000) return '#7c5fff';
+                                return '#e0f3f8';
+                            }
+                        },
+                        label: {
+                            show: true,
+                            position: 'right',
+                            color: '#eaf6fb',
+                            formatter: function(params) { return (params.value / 10000).toFixed(1) + '万'; }
+                        }
+                    }]
+                });
+            });
+    }
+    updateHotChart();
+    setInterval(updateHotChart, 180000);
+    </script>
+    <script>
+    // 热搜卡片
+    function initCards() {
+        const container = document.getElementById('cardsContainer');
+        fetch('/api/hot-searches/cards')
+            .then(res => res.json())
+            .then(data => {
+                container.innerHTML = '';
+                data.cards.sort((a, b) => b.hot_value - a.hot_value);
+                data.cards.forEach((card, index) => {
+                    const cardElement = document.createElement('div');
+                    cardElement.className = 'card';
+                    cardElement.innerHTML = `
+                        <span class="card-rank">#${index + 1}</span>
+                        <span class="card-keyword">${card.keyword}</span>
+                        <span class="card-hot">${(card.hot_value / 10000).toFixed(1)}万</span>
+                    `;
+                    cardElement.onclick = () => window.open(card.url, '_blank');
+                    container.appendChild(cardElement);
+                });
+            });
+    }
+    initCards();
+    setInterval(initCards, 60000);
+
+    // 热搜摘要轮播
+    let currentSummaryIndex = 0;
+    let summaries = [];
+    let summaryInterval = null;
+    let isAnimating = false;
+
+    function renderSummary(index) {
+        const container = document.getElementById('summaryCarousel');
+        container.innerHTML = '';
+        if (summaries.length === 0) {
+            container.innerHTML = '<div class="summary-item active">暂无热搜摘要数据</div>';
+            return;
+        }
+        const item = document.createElement('div');
+        item.className = 'summary-item active';
+        item.innerHTML = `
+            <div class="summary-keyword">${summaries[index].keyword}</div>
+            <div class="summary-content">${summaries[index].summary}</div>
+            <div class="summary-hot">阅读量：${(summaries[index].hot_value / 10000).toFixed(1)}万</div>
+        `;
+        container.appendChild(item);
+    }
+
+    function switchSummary(nextIndex) {
+        if (isAnimating) return;
+        isAnimating = true;
+        const container = document.getElementById('summaryCarousel');
+        const oldItem = container.querySelector('.summary-item.active');
+        if (!oldItem) {
+            renderSummary(nextIndex);
+            isAnimating = false;
+            return;
+        }
+        // 新卡片
+        const newItem = document.createElement('div');
+        newItem.className = 'summary-item';
+        newItem.innerHTML = `
+            <div class="summary-keyword">${summaries[nextIndex].keyword}</div>
+            <div class="summary-content">${summaries[nextIndex].summary}</div>
+            <div class="summary-hot">阅读量：${(summaries[nextIndex].hot_value / 10000).toFixed(1)}万</div>
+        `;
+        container.appendChild(newItem);
+
+        // 触发动画
+        setTimeout(() => {
+            oldItem.classList.remove('active');
+            oldItem.classList.add('out');
+            newItem.classList.add('active');
+            // 动画结束后移除旧卡片
+            setTimeout(() => {
+                if (oldItem.parentNode) oldItem.parentNode.removeChild(oldItem);
+                isAnimating = false;
+            }, 600);
+        }, 20);
+    }
+
+    function startSummaryRotation() {
+        if (summaryInterval) clearInterval(summaryInterval);
+        if (summaries.length <= 1) return;
+        summaryInterval = setInterval(() => {
+            const nextIndex = (currentSummaryIndex + 1) % summaries.length;
+            switchSummary(nextIndex);
+            currentSummaryIndex = nextIndex;
+        }, 5000);
+    }
+
+    function initSummaryCarousel() {
+        const container = document.getElementById('summaryCarousel');
+        fetch('/api/hot-searches/summaries')
+            .then(res => res.json())
+            .then(data => {
+                summaries = data.summaries;
+                currentSummaryIndex = 0;
+                renderSummary(currentSummaryIndex);
+                startSummaryRotation();
+            });
+    }
+    initSummaryCarousel();
+    setInterval(initSummaryCarousel, 60000);
+    </script>
+    <script>
+    // 添加窗口大小变化监听
+    window.addEventListener('resize', function() {
+        // 重新调整所有图表大小
+        const charts = [
+            multiChart,
+            echarts.getInstanceByDom(document.getElementById('categoryChart')),
+            echarts.getInstanceByDom(document.getElementById('trendChart')),
+            echarts.getInstanceByDom(document.getElementById('chinaMapChart')),
+            hotChart
+        ];
+        
+        charts.forEach(chart => {
+            if (chart) {
+                chart.resize();
+            }
+        });
+    });
+    </script>
+</body>
+</html>
