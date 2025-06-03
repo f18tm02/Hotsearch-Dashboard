@@ -11,6 +11,7 @@ import traceback
 import os
 import random
 import re
+import glob
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -306,6 +307,34 @@ def collect_topic_details():
         logger.error(f"话题详情采集任务异常: {str(e)}")
         logger.error(f"异常堆栈: {traceback.format_exc()}")
 
+def clear_cache_files():
+    """清除data目录下的缓存文件"""
+    try:
+        logger.info("开始清除缓存文件")
+        data_dir = 'data'
+        # 需要保留的重要文件
+        important_files = {'dynamic_keywords.json', 'weibo_hot_searches.json'}
+        
+        # 获取所有.json文件
+        json_files = glob.glob(os.path.join(data_dir, '*.json'))
+        
+        cleared_count = 0
+        for file_path in json_files:
+            file_name = os.path.basename(file_path)
+            # 如果不是重要文件，则删除
+            if file_name not in important_files:
+                try:
+                    os.remove(file_path)
+                    cleared_count += 1
+                    logger.info(f"已删除缓存文件: {file_name}")
+                except Exception as e:
+                    logger.error(f"删除文件 {file_name} 失败: {str(e)}")
+        
+        logger.info(f"缓存清理完成，共清理 {cleared_count} 个文件")
+    except Exception as e:
+        logger.error(f"清除缓存文件时发生错误: {str(e)}")
+        logger.error(f"异常堆栈: {traceback.format_exc()}")
+
 # 定时任务保持不变
 if __name__ == '__main__':
     setup_routes()
@@ -319,12 +348,20 @@ if __name__ == '__main__':
         misfire_grace_time=60
     )
     
-    # 话题详情采集任务（改为1分钟间隔，方便调试）
+    # 话题详情采集任务（1分钟间隔）
     scheduler.add_job(
         collect_topic_details,
         'interval',
-        minutes=1,  # 改为1分钟
+        minutes=1,
         misfire_grace_time=60
+    )
+    
+    # 添加缓存清理任务（每6小时执行一次）
+    scheduler.add_job(
+        clear_cache_files,
+        'interval',
+        hours=6,
+        misfire_grace_time=3600
     )
     
     # 获取并打印任务信息
