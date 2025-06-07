@@ -82,7 +82,7 @@ def save_topic_detail(data, session=None):
         
         if should_close_session:
             session.commit()
-            logger.info(f"成功保存话题 {data['keyword']} 的详情数据到数据库")
+            #logger.info(f"成功保存话题 {data['keyword']} 的详情数据到数据库")
             return True
             
     except Exception as e:

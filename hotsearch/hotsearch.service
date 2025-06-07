@@ -1,0 +1,15 @@
+[Unit]
+Description=HotSearch Gunicorn Service
+After=network.target
+
+[Service]
+User=your_user  # 替换为您的用户名
+Group=your_group  # 替换为您的用户组
+WorkingDirectory=/path/to/your/project  # 替换为您的项目路径
+Environment="PATH=/path/to/your/venv/bin"  # 替换为您的虚拟环境路径
+ExecStart=/path/to/your/venv/bin/gunicorn -c gunicorn_config.py app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 
